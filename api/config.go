@@ -71,9 +71,9 @@ func Setup() *chi.Mux {
 		r.Use(m)
 	}
 
-	r.Get("/", nil)
-	r.Get("/health", nil)
-	r.Get("/status", nil)
+	r.Get("/", GetStatusRoute)
+	r.Get("/health", GetHealthRoute)
+	r.Get("/status", GetStatusRoute)
 
 	r.Post("/verify", VerifyLoginRoute)
 	r.Post("/validate", ValidateJWTRoute)
