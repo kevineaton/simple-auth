@@ -8,7 +8,11 @@ This project was quickly written, validated, and rolled into a very cheap server
 
 ## Usage
 
-Currently, you need to download the code, build the binary, and then manually place it on your server. A Docker image is coming really soon.
+The best way to run this is to use the [Docker Image](https://hub.docker.com/r/kevineaton/simple-auth):
+
+`docker pull kevineaton/simple-auth`
+
+To run it, you would pass in the environment variables below.
 
 ## Environment Variables
 
@@ -28,6 +32,16 @@ Currently, you need to download the code, build the binary, and then manually pl
 ### A Note On Encryption
 
 As the data is passed in through the environment, it is unencrypted. As such, if someone inspects the environment, they would likely be able to sniff the information. Granted, if they have access to your environment, something else has likely gone awry, but I recommend encrypting the environment. I personally prefer [Anisble Vault](https://docs.ansible.com/ansible/latest/user_guide/vault.html) but that implementation is up to you.
+
+## Building the Docker Image
+
+Building the Docker image is a two step process. First, you will want to build the main image:
+
+`docker build -t "kevineaton/simple-auth:latest" .`
+
+Next, we want to slim it way down, so we build a slimmed down image:
+
+`docker build -f Dockerfile-slim -t "kevineaton/simple-auth"`
 
 ## Contributing
 

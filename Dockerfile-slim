@@ -1,0 +1,7 @@
+FROM kevineaton/simple-auth as base
+
+FROM busybox:glibc
+WORKDIR /app
+COPY --from=base /app .
+COPY --from=base /etc/ssl/certs /etc/ssl/certs
+CMD ["./simple-auth"]
