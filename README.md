@@ -43,13 +43,19 @@ Next, we want to slim it way down, so we build a slimmed down image:
 
 `docker build -f Dockerfile-slim -t "kevineaton/simple-auth"`
 
+## Task
+
+I prefer [Task](https://github.com/go-task/task) for managing most of my projects. While not necessary, it can simplify the development process. As such, there is a `Taskfile.yml` file available for usage as well.
+
 ## Contributing
 
 Contributions are welcome, although not necessarily needed. This was built to solve a very specific situation in which security of the data is non-compromising. In other words, if the protected section did leak, there wouldn't be any lost personal data or IP. As such, the features list doesn't necessarily need to grow, but if you can think of a need that this tool can help with, by all means!
 
-## Used libraries
+## Primary libraries
 
 - [Chi](https://github.com/go-chi/chi)
 - [Toolbooth](https://github.com/didip/tollbooth)
 - [CORS](https://github.com/goware/cors)
 - [Testify](https://github.com/stretchr/testify)
+
+Please also see the [automatically generated](https://github.com/gobuffalo/shoulders) `SHOULDERS.md` file.
