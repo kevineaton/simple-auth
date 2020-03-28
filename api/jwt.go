@@ -1,4 +1,4 @@
-package simpleauth
+package api
 
 import (
 	"errors"
