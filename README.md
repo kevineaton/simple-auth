@@ -6,6 +6,12 @@ A site I was consulting on wanted to host a part of their React app behind a use
 
 This project was quickly written, validated, and rolled into a very cheap server. The React App now calls this server, checks the validation of the information, and then returns the appropriate HTTP codes.
 
+## Docs
+
+Open API Specification 3 compatible docs can be found at [https://docs.simpleauth.kevineaton.net/](https://docs.simpleauth.kevineaton.net/).
+
+You can view the source code for the docs at [https://github.com/kevineaton/simple-auth-docs](https://github.com/kevineaton/simple-auth-docs).
+
 ## Usage
 
 The best way to run this is to use the [Docker Image](https://hub.docker.com/r/kevineaton/simple-auth):
