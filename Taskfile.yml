@@ -34,12 +34,6 @@ tasks:
     desc: Builds and tags the docker image
     cmds:
       - docker build -t "kevineaton/simple-auth:latest" .
-  
-  docker-slim:
-    desc: Builds a slim image.
-    deps: [docker-build]
-    cmds:
-      - docker build -f Dockerfile-slim -t "kevineaton/simple-auth:latest" .
 
   docker-run:
     desc: Runs the latest built docker image
