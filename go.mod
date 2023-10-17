@@ -1,16 +1,18 @@
 module github.com/kevineaton/simple-auth
 
-go 1.13
+go 1.20
 
 require (
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
-	github.com/didip/tollbooth v4.0.2+incompatible
-	github.com/didip/tollbooth_chi v0.0.0-20170928041846-6ab5f3083f3d
-	github.com/go-chi/chi v4.0.4+incompatible
-	github.com/go-chi/render v1.0.1
-	github.com/goware/cors v1.0.1
-	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
-	github.com/stretchr/testify v1.5.1
-	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e // indirect
-	golang.org/x/time v0.0.0-20191024005414-555d28b269f0 // indirect
+	github.com/go-chi/chi v1.5.5
+	github.com/go-chi/cors v1.2.1
+	github.com/go-chi/render v1.0.3
+	github.com/stretchr/testify v1.8.4
+)
+
+require (
+	github.com/ajg/form v1.5.1 // indirect
+	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

@@ -7,12 +7,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/didip/tollbooth"
-	"github.com/didip/tollbooth_chi"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
+	"github.com/go-chi/cors"
 	"github.com/go-chi/render"
-	"github.com/goware/cors"
 )
 
 // Config is a global configuration object that consolidates the various settings
@@ -90,13 +88,9 @@ func envHelper(key, defaultValue string) string {
 }
 
 func getMiddlewares() []func(http.Handler) http.Handler {
-	limiter := tollbooth.NewLimiter(float64(Config.RateLimit), nil)
 	handlers := []func(http.Handler) http.Handler{}
 
-	h := tollbooth_chi.LimitHandler(limiter)
-	handlers = append(handlers, h)
-
-	h = middleware.RequestID
+	h := middleware.RequestID
 	handlers = append(handlers, h)
 
 	h = middleware.RealIP
