@@ -1,6 +1,6 @@
 module github.com/kevineaton/simple-auth
 
-go 1.20
+go 1.22
 
 require (
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
