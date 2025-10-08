@@ -4,10 +4,10 @@ github.com/ajg/form
 # github.com/davecgh/go-spew v1.1.1
 ## explicit
 github.com/davecgh/go-spew/spew
-# github.com/go-chi/chi v1.5.5
-## explicit; go 1.16
-github.com/go-chi/chi
-github.com/go-chi/chi/middleware
+# github.com/go-chi/chi/v5 v5.2.3
+## explicit; go 1.20
+github.com/go-chi/chi/v5
+github.com/go-chi/chi/v5/middleware
 # github.com/go-chi/cors v1.2.2
 ## explicit; go 1.14
 github.com/go-chi/cors
