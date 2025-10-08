@@ -1,4 +1,4 @@
-FROM golang:1.15 AS base
+FROM golang:1.25 AS base
 
 RUN mkdir /app
 ADD . /go/src/github.com/kevineaton/simple-auth
