@@ -29,6 +29,15 @@ tasks:
     desc: Runs coverage and generates the needed artifacts
     cmds:
       - go test -mod=vendor -v -coverprofile=coverage.out ./api && gocover-cobertura < coverage.out > coverage.xml && go tool cover -html=coverage.out -o coverage.html
+  
+  go-dep-update:
+    cmds: 
+      - go get -u ./...
+      - task vendor
+  
+  go-dep-update-list:
+    cmds:
+      - go list -u -mod=mod -m all 2>/dev/null | grep '\['
 
   docker-build:
     desc: Builds and tags the docker image

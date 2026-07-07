@@ -19,7 +19,7 @@ func TestJWT(t *testing.T) {
 	defer os.Setenv("SA_PASSWORD", originalPassword)
 	defer os.Setenv("SA_TOKEN_SALT", originalSalt)
 	Setup()
-	input := JWTUser{
+	input := JWT{
 		Username: "testuser",
 	}
 

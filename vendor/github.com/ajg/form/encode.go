@@ -18,7 +18,7 @@ import (
 
 // NewEncoder returns a new form Encoder.
 func NewEncoder(w io.Writer) *Encoder {
-	return &Encoder{w, defaultDelimiter, defaultEscape, false}
+	return &Encoder{w, defaultDelimiter, defaultEscape, false, false}
 }
 
 // Encoder provides a way to encode to a Writer.
@@ -27,6 +27,7 @@ type Encoder struct {
 	d rune
 	e rune
 	z bool
+	o bool
 }
 
 // DelimitWith sets r as the delimiter used for composite keys by Encoder e and returns the latter; it is '.' by default.
@@ -47,10 +48,16 @@ func (e *Encoder) KeepZeros(z bool) *Encoder {
 	return e
 }
 
+// OmitEmpty sets whether Encoder e should omit empty (zero) struct fields during encoding, and returns the former; this is equivalent to having ",omitempty" on every field. By default, empty fields are included.
+func (e *Encoder) OmitEmpty(o bool) *Encoder {
+	e.o = o
+	return e
+}
+
 // Encode encodes dst as form and writes it out using the Encoder's Writer.
 func (e Encoder) Encode(dst interface{}) error {
 	v := reflect.ValueOf(dst)
-	n, err := encodeToNode(v, e.z)
+	n, err := encodeToNode(v, e.z, e.o)
 	if err != nil {
 		return err
 	}
@@ -66,37 +73,56 @@ func (e Encoder) Encode(dst interface{}) error {
 }
 
 // EncodeToString encodes dst as a form and returns it as a string.
-func EncodeToString(dst interface{}) (string, error) {
+func EncodeToString(dst interface{}, needEmptyValue ...bool) (string, error) {
+	z := defaultKeepZeros
+	if len(needEmptyValue) != 0 {
+		z = needEmptyValue[0]
+	}
+	return EncodeToStringWith(dst, defaultDelimiter, defaultEscape, z)
+}
+
+// EncodeToStringWith encodes dst as a form with delimiter d, escape e, keeping zero values if z, and returns it as a string.
+func EncodeToStringWith(dst interface{}, d rune, e rune, z bool) (string, error) {
 	v := reflect.ValueOf(dst)
-	n, err := encodeToNode(v, false)
+	n, err := encodeToNode(v, z, false)
 	if err != nil {
 		return "", err
 	}
-	vs := n.values(defaultDelimiter, defaultEscape)
+	vs := n.values(d, e)
 	return vs.Encode(), nil
 }
 
 // EncodeToValues encodes dst as a form and returns it as Values.
-func EncodeToValues(dst interface{}) (url.Values, error) {
+func EncodeToValues(dst interface{}, needEmptyValue ...bool) (url.Values, error) {
+	z := defaultKeepZeros
+	if len(needEmptyValue) != 0 {
+		z = needEmptyValue[0]
+	}
+	return EncodeToValuesWith(dst, defaultDelimiter, defaultEscape, z)
+}
+
+// EncodeToValuesWith encodes dst as a form with delimiter d, escape e, keeping zero values if z, and returns it as Values.
+func EncodeToValuesWith(dst interface{}, d rune, e rune, z bool) (url.Values, error) {
 	v := reflect.ValueOf(dst)
-	n, err := encodeToNode(v, false)
+	n, err := encodeToNode(v, z, false)
 	if err != nil {
 		return nil, err
 	}
-	vs := n.values(defaultDelimiter, defaultEscape)
+	vs := n.values(d, e)
 	return vs, nil
 }
 
-func encodeToNode(v reflect.Value, z bool) (n node, err error) {
+func encodeToNode(v reflect.Value, z bool, o bool) (n node, err error) {
 	defer func() {
 		if e := recover(); e != nil {
 			err = fmt.Errorf("%v", e)
 		}
 	}()
-	return getNode(encodeValue(v, z)), nil
+	seen := make(map[uintptr]bool)
+	return getNode(encodeValue(v, z, o, seen)), nil
 }
 
-func encodeValue(v reflect.Value, z bool) interface{} {
+func encodeValue(v reflect.Value, z bool, o bool, seen map[uintptr]bool) interface{} {
 	t := v.Type()
 	k := v.Kind()
 
@@ -107,21 +133,35 @@ func encodeValue(v reflect.Value, z bool) interface{} {
 	}
 
 	switch k {
-	case reflect.Ptr, reflect.Interface:
-		return encodeValue(v.Elem(), z)
+	case reflect.Ptr:
+		ptr := v.Pointer()
+		if seen[ptr] {
+			panic("form: encoding a cycle via " + t.String())
+		}
+		seen[ptr] = true
+		defer delete(seen, ptr)
+		return encodeValue(v.Elem(), z, o, seen)
+	case reflect.Interface:
+		return encodeValue(v.Elem(), z, o, seen)
 	case reflect.Struct:
 		if t.ConvertibleTo(timeType) {
 			return encodeTime(v)
 		} else if t.ConvertibleTo(urlType) {
 			return encodeURL(v)
 		}
-		return encodeStruct(v, z)
+		return encodeStruct(v, z, o, seen)
 	case reflect.Slice:
-		return encodeSlice(v, z)
+		return encodeSlice(v, z, o, seen)
 	case reflect.Array:
-		return encodeArray(v, z)
+		return encodeArray(v, z, o, seen)
 	case reflect.Map:
-		return encodeMap(v, z)
+		ptr := v.Pointer()
+		if seen[ptr] {
+			panic("form: encoding a cycle via " + t.String())
+		}
+		seen[ptr] = true
+		defer delete(seen, ptr)
+		return encodeMap(v, z, o, seen)
 	case reflect.Invalid, reflect.Uintptr, reflect.UnsafePointer, reflect.Chan, reflect.Func:
 		panic(t.String() + " has unsupported kind " + t.Kind().String())
 	default:
@@ -129,49 +169,203 @@ func encodeValue(v reflect.Value, z bool) interface{} {
 	}
 }
 
-func encodeStruct(v reflect.Value, z bool) interface{} {
-	t := v.Type()
-	n := node{}
-	for i := 0; i < t.NumField(); i++ {
-		f := t.Field(i)
-		k, oe := fieldInfo(f)
+type encoderField struct {
+	index     []int
+	name      string
+	omitempty bool
+}
 
-		if k == "-" {
+func encodeStruct(v reflect.Value, z bool, o bool, seen map[uintptr]bool) interface{} {
+	fields := collectFields(v.Type())
+	n := node{}
+	for _, f := range fields {
+		fv := fieldByIndex(v, f.index)
+		if !fv.IsValid() {
 			continue
-		} else if fv := v.Field(i); oe && isEmptyValue(fv) {
-			delete(n, k)
-		} else {
-			n[k] = encodeValue(fv, z)
 		}
+		if (o || f.omitempty) && isEmptyValue(fv) {
+			continue
+		}
+		n[f.name] = encodeValue(fv, z, o, seen)
 	}
 	return n
 }
 
-func encodeMap(v reflect.Value, z bool) interface{} {
+func hasExplicitTag(f reflect.StructField) bool {
+	tag := f.Tag.Get("form")
+	if tag == "" {
+		tag = f.Tag.Get("json")
+	}
+	if tag == "" {
+		return false
+	}
+	return strings.SplitN(tag, ",", 2)[0] != ""
+}
+
+func shouldPromote(f reflect.StructField) bool {
+	return f.Anonymous && !hasExplicitTag(f)
+}
+
+func collectFields(t reflect.Type) []encoderField {
+	type queueItem struct {
+		typ   reflect.Type
+		index []int
+		depth int
+	}
+	type fieldCandidate struct {
+		field  encoderField
+		depth  int
+		tagged bool
+	}
+
+	current := []queueItem{{typ: t}}
+	visited := map[reflect.Type]bool{}
+	candidatesByName := map[string][]fieldCandidate{}
+	nameOrder := []string{}
+
+	for len(current) > 0 {
+		var next []queueItem
+		for _, item := range current {
+			if visited[item.typ] {
+				continue
+			}
+			visited[item.typ] = true
+
+			for i := 0; i < item.typ.NumField(); i++ {
+				f := item.typ.Field(i)
+				k, oe := fieldInfo(f)
+				if k == omittedKey {
+					continue
+				}
+
+				idx := make([]int, len(item.index)+1)
+				copy(idx, item.index)
+				idx[len(item.index)] = i
+
+				if shouldPromote(f) {
+					ft := f.Type
+					if ft.Kind() == reflect.Ptr {
+						ft = ft.Elem()
+					}
+					if ft.Kind() == reflect.Struct && !isLeafStruct(ft) {
+						next = append(next, queueItem{typ: ft, index: idx, depth: item.depth + 1})
+						continue
+					}
+				}
+
+				tagged := hasExplicitTag(f)
+				fc := fieldCandidate{
+					field: encoderField{
+						index:     idx,
+						name:      k,
+						omitempty: oe,
+					},
+					depth:  item.depth,
+					tagged: tagged,
+				}
+
+				if _, exists := candidatesByName[k]; !exists {
+					nameOrder = append(nameOrder, k)
+				}
+				candidatesByName[k] = append(candidatesByName[k], fc)
+			}
+		}
+
+		current = next
+	}
+
+	// Resolve conflicts
+	var result []encoderField
+	for _, name := range nameOrder {
+		cands := candidatesByName[name]
+		if len(cands) == 1 {
+			result = append(result, cands[0].field)
+			continue
+		}
+
+		// Multiple candidates: keep only those at minimum depth
+		minDepth := cands[0].depth
+		for _, c := range cands[1:] {
+			if c.depth < minDepth {
+				minDepth = c.depth
+			}
+		}
+		var filtered []fieldCandidate
+		for _, c := range cands {
+			if c.depth == minDepth {
+				filtered = append(filtered, c)
+			}
+		}
+
+		if len(filtered) == 1 {
+			result = append(result, filtered[0].field)
+			continue
+		}
+
+		// Still multiple at same depth: keep only tagged ones
+		var tagged []fieldCandidate
+		for _, c := range filtered {
+			if c.tagged {
+				tagged = append(tagged, c)
+			}
+		}
+
+		if len(tagged) == 1 {
+			result = append(result, tagged[0].field)
+			continue
+		}
+
+		// Still multiple or none tagged: ambiguous, omit entirely
+	}
+
+	return result
+}
+
+func fieldByIndex(v reflect.Value, index []int) reflect.Value {
+	for _, i := range index {
+		if v.Kind() == reflect.Ptr {
+			if v.IsNil() {
+				return reflect.Value{}
+			}
+			v = v.Elem()
+		}
+		v = v.Field(i)
+	}
+	return v
+}
+
+func isLeafStruct(ft reflect.Type) bool {
+	if ft.ConvertibleTo(timeType) || ft.ConvertibleTo(urlType) {
+		return true
+	}
+	return ft.Implements(textMarshalerType) || reflect.PtrTo(ft).Implements(textMarshalerType)
+}
+
+func encodeMap(v reflect.Value, z bool, o bool, seen map[uintptr]bool) interface{} {
 	n := node{}
 	for _, i := range v.MapKeys() {
-		k := getString(encodeValue(i, z))
-		n[k] = encodeValue(v.MapIndex(i), z)
+		k := getString(encodeValue(i, z, o, seen))
+		n[k] = encodeValue(v.MapIndex(i), z, o, seen)
 	}
 	return n
 }
 
-func encodeArray(v reflect.Value, z bool) interface{} {
+func encodeArray(v reflect.Value, z bool, o bool, seen map[uintptr]bool) interface{} {
 	n := node{}
 	for i := 0; i < v.Len(); i++ {
-		n[strconv.Itoa(i)] = encodeValue(v.Index(i), z)
+		n[strconv.Itoa(i)] = encodeValue(v.Index(i), z, o, seen)
 	}
 	return n
 }
 
-func encodeSlice(v reflect.Value, z bool) interface{} {
+func encodeSlice(v reflect.Value, z bool, o bool, seen map[uintptr]bool) interface{} {
 	t := v.Type()
 	if t.Elem().Kind() == reflect.Uint8 {
 		return string(v.Bytes()) // Encode byte slices as a single string by default.
 	}
 	n := node{}
 	for i := 0; i < v.Len(); i++ {
-		n[strconv.Itoa(i)] = encodeValue(v.Index(i), z)
+		n[strconv.Itoa(i)] = encodeValue(v.Index(i), z, o, seen)
 	}
 	return n
 }
@@ -260,15 +454,23 @@ func canIndexOrdinally(v reflect.Value) bool {
 	return false
 }
 
-func fieldInfo(f reflect.StructField) (k string, oe bool) {
+func fieldInfo(f reflect.StructField, tagName ...string) (k string, oe bool) {
+	_tagName := "form"
+	if len(tagName) > 0 {
+		_tagName = tagName[0]
+	}
 	if f.PkgPath != "" { // Skip private fields.
 		return omittedKey, oe
 	}
 
 	k = f.Name
-	tag := f.Tag.Get("form")
+	tag := f.Tag.Get(_tagName)
 	if tag == "" {
-		return k, oe
+		if len(tagName) == 0 && _tagName != "json" {
+			return fieldInfo(f, "json") // using json as secondary
+		} else {
+			return k, oe
+		}
 	}
 
 	ps := strings.SplitN(tag, ",", 2)
@@ -335,11 +537,12 @@ func findField(v reflect.Value, n string, ignoreCase bool) (reflect.Value, bool)
 }
 
 var (
-	stringType    = reflect.TypeOf(string(""))
-	stringMapType = reflect.TypeOf(map[string]interface{}{})
-	timeType      = reflect.TypeOf(time.Time{})
-	timePtrType   = reflect.TypeOf(&time.Time{})
-	urlType       = reflect.TypeOf(url.URL{})
+	stringType        = reflect.TypeOf(string(""))
+	stringMapType     = reflect.TypeOf(map[string]interface{}{})
+	timeType          = reflect.TypeOf(time.Time{})
+	timePtrType       = reflect.TypeOf(&time.Time{})
+	urlType           = reflect.TypeOf(url.URL{})
+	textMarshalerType = reflect.TypeOf((*encoding.TextMarshaler)(nil)).Elem()
 )
 
 func skipTextMarshalling(t reflect.Type) bool {
