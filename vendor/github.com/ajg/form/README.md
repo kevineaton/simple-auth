@@ -3,7 +3,7 @@ form
 
 A Form Encoding & Decoding Package for Go, written by [Alvaro J. Genial](http://alva.ro).
 
-[![Build Status](https://travis-ci.org/ajg/form.png?branch=master)](https://travis-ci.org/ajg/form)
+[![Build Status](https://github.com/ajg/form/actions/workflows/ci.yml/badge.svg)](https://github.com/ajg/form/actions/workflows/ci.yml)
 [![GoDoc](https://godoc.org/github.com/ajg/form?status.png)](https://godoc.org/github.com/ajg/form)
 
 Synopsis
@@ -21,7 +21,7 @@ The implementation is in usable shape and is fairly well tested with its accompa
 Dependencies
 ------------
 
-The only requirement is [Go 1.2](http://golang.org/doc/go1.2) or later.
+The only requirement is [Go 1.17](http://golang.org/doc/go1.17) or later.
 
 Usage
 -----
@@ -131,6 +131,29 @@ While encouraged, it is not necessary to define a type (e.g. a `struct`) in orde
 
 By default, and without custom marshaling, zero values (also known as empty/default values) are encoded as the empty string. To disable this behavior, meaning to keep zero values in their literal form (e.g. `0` for integral types), `Encoder` offers a `KeepZeros` setter method, which will do just that when set to `true`.
 
+For instance, given...
+
+```go
+foo := map[string]interface{}{"b": false, "i": 0}
+```
+
+...the following...
+
+```go
+form.EncodeToString(foo) // i.e. keepZeros == false
+```
+
+...will result in `"b=&i="`, whereas...
+
+```go
+keepZeros := true
+delimiter := '.'
+escape := '\\'
+form.EncodeToStringWith(foo, delimiter, escape, keepZeros)
+```
+
+...will result in `"b=false&i=0"`.
+
 ### Unsupported Values
 
 Values of the following kinds aren't supported and, if present, must be ignored.
@@ -216,24 +239,6 @@ Custom:  foo.bar%2Fqux=XYZ
 ```
 
 (`%5C` and `%2F` represent `\` and `/`, respectively.)
-
-Limitations
------------
-
- - Circular (self-referential) values are untested.
-
-Future Work
------------
-
-The following items would be nice to have in the future—though they are not being worked on yet:
-
- - An option to treat all values as if they had been tagged with `omitempty`.
- - An option to automatically treat all field names in `camelCase` or `underscore_case`.
- - Built-in support for the types in [`math/big`](http://golang.org/pkg/math/big/).
- - Built-in support for the types in [`image/color`](http://golang.org/pkg/image/color/).
- - Improve encoding/decoding by reading/writing directly from/to the `io.Reader`/`io.Writer` when possible, rather than going through an intermediate representation (i.e. `node`) which requires more memory.
-
-(Feel free to implement any of these and then send a pull request.)
 
 Related Work
 ------------

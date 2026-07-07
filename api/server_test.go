@@ -71,7 +71,7 @@ func TestBasicValidationRoutes(t *testing.T) {
 	// try some garbage JWT calls to the validate
 
 	// start with an expired JWT
-	expiredJWT, _ := createJwt(&JWTUser{
+	expiredJWT, _ := createJwt(&JWT{
 		Expires:  time.Now().AddDate(0, -2, 0).Format("2006-01-02T15:04:05Z"),
 		Username: username,
 	})
@@ -85,7 +85,7 @@ func TestBasicValidationRoutes(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, code)
 
 	// an invalid expires
-	invalidExpiresJWT, _ := createJwt(&JWTUser{
+	invalidExpiresJWT, _ := createJwt(&JWT{
 		Expires:  "November 28th",
 		Username: username,
 	})

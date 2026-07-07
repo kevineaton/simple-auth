@@ -41,7 +41,7 @@ func VerifyLoginRoute(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// we will generate a JWT to send back that can be checked against the /validate end point
-	jwt, err := createJwt(&JWTUser{
+	jwt, err := createJwt(&JWT{
 		Username: input.Username,
 	})
 	if err != nil {
